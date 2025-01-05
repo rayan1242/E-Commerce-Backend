@@ -1,6 +1,8 @@
 const User = require('../model/userModel');
 const asyncHandler = require('express-async-handler');
 const generateToken = require('../config/jwttoken');
+const generateRefreshToken = require('../config/refreshToken');
+const jwt = require('jsonwebtoken');
 
 const createUser = asyncHandler(async (req, res) => {
     const email = req.body.email;
@@ -23,6 +25,16 @@ const loginUser = asyncHandler(async (req, res) => {
     const { email, password } = req.body;
     const user = await User.findOne({email});
     if(user && (await user.matchPassword(password))){
+        const refreshToken = generateRefreshToken(user._id);
+        user.refreshToken = refreshToken;
+        await user.save();
+        res.cookie('refreshToken', refreshToken, {
+            httpOnly: true,
+            maxAge: 72 * 60 * 60 * 1000,
+            secure: true,
+            sameSite: 'none'
+        });
+
         res.json(
             {
                 _id: user._id,
@@ -41,6 +53,42 @@ const loginUser = asyncHandler(async (req, res) => {
         throw new Error('Invalid email or password');
     }
 
+});
+
+const refreshToken = asyncHandler(async (req, res) => {
+    const refreshToken = req.cookies.refreshToken;
+    if(!refreshToken){
+        throw new Error('No token found');
+    }
+    const newuser = await User.findOne({refreshToken});
+    if(!newuser){
+        throw new Error('No user found');
+    }
+    jwt.verify(refreshToken, process.env.JWT_SECRET, async (err, user) => {
+        if(err || newuser.id !== user.id){
+            throw new Error('Invalid token');
+        }
+        const accessToken = generateToken({id: user.id});
+        newuser.refreshToken = refreshToken;
+        await newuser.save();
+        res.json({accessToken});
+    });
+});
+
+const logoutHandler = asyncHandler(async (req, res) => {
+    if(!req.cookies.refreshToken){
+        throw new Error('No token found');
+    }
+    const user= await User.findOne({refreshToken: req.cookies.refreshToken});
+    if(!user){
+        user.refreshToken = '';
+        res.clearCookie('refreshToken');
+        throw new Error('No user found');
+    }
+    await user.save();
+    res.clearCookie('refreshToken');
+    res.removeHeader('Authorization');
+    res.status(200).json({message: 'Logged out successfully'});
 });
 
 const getUsers = asyncHandler(async (req, res) => {
@@ -118,5 +166,7 @@ module.exports = {
     deleteUser,
     updateUser,
     blockUser,
-    unblockUser
-};
+    unblockUser,
+    refreshToken,
+    logoutHandler,
+}

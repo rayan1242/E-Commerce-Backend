@@ -1,5 +1,5 @@
 const express = require('express');
-const { createUser } = require('../controller/userController');
+const { createUser, logoutHandler } = require('../controller/userController');
 const { loginUser } = require('../controller/userController');
 const { getUsers } = require('../controller/userController');
 const { getaUser } = require('../controller/userController');
@@ -8,11 +8,14 @@ const { updateUser } = require('../controller/userController');
 const { blockUser } = require('../controller/userController');
 const { unblockUser } = require('../controller/userController');
 const {authMiddleware,isAdmin} = require('../middleware/authMiddleware');
+const {refreshToken} = require('../controller/userController');
 const router = express.Router();
 
 router.post('/register',createUser);
 router.post('/login',loginUser);
-router.get('/users',getUsers);
+router.post('/refresh',refreshToken);
+router.post('/logout',logoutHandler);
+router.get('/users',authMiddleware,getUsers);
 router.get('/user/:id',authMiddleware,isAdmin,getaUser);
 router.delete('/delete/:id',deleteUser);
 router.patch('/update/:id',updateUser);
