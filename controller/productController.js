@@ -55,6 +55,16 @@ const deleteProduct = asyncHandler(async (req, res) => {
     }
 });
 
+const getProducts = asyncHandler(async (req, res) => {
+    try{
+        const products = await product.find({id:req.params.id});
+        res.status(200).send(products);
+    }catch(error){
+        throw new Error('Products not found');
+    }
+});
+
+
 module.exports = {
     createProduct,
     getProducts,
