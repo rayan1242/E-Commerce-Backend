@@ -25,8 +25,49 @@ const getProducts = asyncHandler(async (req, res) => {
 
 const getAllProducts = asyncHandler(async (req, res) => {
     try{
-        const products = await product.find({});
+       //Filtering
+        const filterObj = {...req.query};
+        const excludeFields = ['page','sort','limit','fields'];
+        excludeFields.forEach(el => delete filterObj[el]);
+        let queryStr = JSON.stringify(filterObj);
+        queryStr = queryStr.replace(/\b(gte|gt|lte|lt)\b/g, match => `$${match}`);
+        let query = products.find(JSON.parse(queryStr));
+        //Sorting
+        if(req.query.sort){
+            const sortBy = req.query.sort.split(',').join(' ');
+            query = query.sort(sortBy);
+        }
+        else{
+            query = query.sort('-createdAt');
+        }
+
+        //Field limiting
+        if(req.query.fields){
+        const fields = req.query.fields.split(',').join(' ');
+        query = query.select(fields);
+        }
+        else{
+            query = query.select('-__v');
+        }
+
+        //Pagination
+        const page = req.query.page * 1 || 1;
+        const limit = req.query.limit * 1 || 100;
+        const skip = (page - 1) * limit;
+        query = query.skip(skip).limit(limit);
+        if(req.query.page){
+            const numProducts = await products.countDocuments();
+            if(skip >= numProducts) throw new Error('This page does not exist');
+        }
+        query = query.skip(skip).limit(limit);
+        if(req.query.page){
+            const numProducts = await products.countDocuments();
+            if(skip >= numProducts) throw new Error('This page does not exist');
+        }
+        
+        const products = await query;
         res.status(200).send(products);
+
     }catch(error){
         throw new Error('Products not found');
     }
@@ -55,14 +96,7 @@ const deleteProduct = asyncHandler(async (req, res) => {
     }
 });
 
-const getProducts = asyncHandler(async (req, res) => {
-    try{
-        const products = await product.find({id:req.params.id});
-        res.status(200).send(products);
-    }catch(error){
-        throw new Error('Products not found');
-    }
-});
+
 
 
 module.exports = {
